@@ -19,7 +19,7 @@ stopwords_regex = paste0('\\b', stopwords_regex, '\\b')
 
 
 ########### Clean data###############
-df_tmp <- df_train[2,]
+df_tmp <- df_train[3,]
 
 df_tmp_clean <- df_tmp %>%
   mutate(comment_text = str_replace_all(comment_text, "[\r\n]", " ")) %>%
