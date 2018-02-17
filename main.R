@@ -19,12 +19,12 @@ stopwords_regex = paste0('\\b', stopwords_regex, '\\b')
 
 
 ########### Clean data###############
-df_tmp <- df_train[1,]
+df_tmp <- df_train[2,]
 
 df_tmp_clean <- df_tmp %>%
   mutate(comment_text = str_replace_all(comment_text, "[\r\n]", " ")) %>%
   mutate(comment_text = tolower(comment_text)) %>%
   mutate(comment_text = gsub("[[:punct:]]","",comment_text)) %>%
   mutate(comment_text = str_replace_all(comment_text,stopwords_regex,"")) %>%
-  mutate(comment_text = trimws(comment_text, which = "both"))
+  mutate(comment_text = gsub("\\s+", " ", comment_text))
 
