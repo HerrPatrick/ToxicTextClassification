@@ -25,5 +25,6 @@ df_tmp_clean <- df_tmp %>%
   mutate(comment_text = str_replace_all(comment_text, "[\r\n]", " ")) %>%
   mutate(comment_text = tolower(comment_text)) %>%
   mutate(comment_text = gsub("[[:punct:]]","",comment_text)) %>%
-  mutate(comment_text = str_replace_all(comment_text,stopwords_regex,""))
+  mutate(comment_text = str_replace_all(comment_text,stopwords_regex,"")) %>%
+  mutate(comment_text = trimws(comment_text, which = "both"))
 
