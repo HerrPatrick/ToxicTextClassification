@@ -4,7 +4,7 @@ library(dplyr)
 library(stringr)
 library(tm)
 library(SnowballC)
-library(qdap)
+#library(qdap) #problem with java re 
 
 ### Load data################
 
@@ -27,13 +27,17 @@ comment_corpus <- tolower(comment_corpus)
 
 
 ########### Clean data###############
-df_tmp <- df_train[1,]
+df_tmp <- df_train[1:500,]
 
 df_tmp_clean <- df_tmp %>%
   mutate(comment_text = str_replace_all(comment_text, "[\r\n]", " ")) %>%
   mutate(comment_text = tolower(comment_text)) %>%
   mutate(comment_text = gsub("[[:punct:]]","",comment_text)) %>%
   mutate(comment_text = str_replace_all(comment_text,stopwords_regex,"")) %>%
-  mutate(comment_text = gsub("\\s+", " ", comment_text))
-  #mutate(comment_text = text_tokens(comment_text, "en"))
+  mutate(comment_text = gsub("\\s+", " ", comment_text)) %>%
+  mutate(comment_text = removeNumbers(comment_text)) %>%
+  mutate(comment_text = stemDocument(comment_text))
+
+  
+#mutate(comment_text = text_tokens(comment_text, "en"))
 
