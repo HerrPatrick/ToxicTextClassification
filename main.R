@@ -11,17 +11,12 @@ library(SnowballC)
 df_train <- read.csv("data/train.csv", sep = ",", stringsAsFactors = F)
 
 # http://rstudio-pubs-static.s3.amazonaws.com/256588_57b585da6c054349825cba46685d8464.html
-####### Create corpus ###############
 
-comment_text <- df_train$comment_text
-comment_source <- VectorSource(comment_text)
-comment_corpus <- VCorpus(comment_source)
 
-comment_corpus <- tolower(comment_corpus)
 
 # Stopwords
-#stopwords_regex = paste(stopwords('en'), collapse = '\\b|\\b')
-#stopwords_regex = paste0('\\b', stopwords_regex, '\\b')
+stopwords_regex = paste(stopwords('en'), collapse = '\\b|\\b')
+stopwords_regex = paste0('\\b', stopwords_regex, '\\b')
 
 
 
@@ -41,3 +36,10 @@ df_tmp_clean <- df_tmp %>%
   
 #mutate(comment_text = text_tokens(comment_text, "en"))
 
+####### Create corpus ###############
+comment_text <- df_tmp_clean$comment_text
+comment_source <- VectorSource(comment_text)
+comment_corpus <- VCorpus(comment_source)
+
+comments_dtm <- DocumentTermMatrix(comment_corpus)
+comments_m <- as.matrix(comments_dtm)
