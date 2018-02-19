@@ -43,3 +43,14 @@ comment_corpus <- VCorpus(comment_source)
 
 comments_dtm <- DocumentTermMatrix(comment_corpus)
 comments_m <- as.matrix(comments_dtm)
+
+
+comments_m_sparse <- removeSparseTerms(comments_dtm,0.98)
+comments_m_sparse
+comments_m <- as.matrix(comments_m_sparse)
+dim(comments_m)
+
+###############
+
+
+
