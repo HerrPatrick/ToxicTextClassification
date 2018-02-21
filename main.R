@@ -5,7 +5,7 @@ library(stringr)
 library(tm)
 library(SnowballC)
 #library(qdap) #problem with java re 
-
+library(e1071)
 ### Load data################
 
 df_train <- read.csv("data/train.csv", sep = ",", stringsAsFactors = F)
@@ -19,10 +19,6 @@ for (i in 1:nrow(df_train)){
   df_train$class1[i] <- if(df_train$rowSum[i]==0) {'ham'} else {'spam'}
 }
 
-
-# Stopwords
-#stopwords_regex = paste(stopwords('en'), collapse = '\\b|\\b')
-#stopwords_regex = paste0('\\b', stopwords_regex, '\\b')
 
 
 ### Creating clean corpus ####
@@ -39,12 +35,14 @@ corpus_clean <- tm_map(corpus_clean, stemDocument, language = "english")
 
 #### Document Term Matrix ####
 
-comments_dtm <- DocumentTermMatrix(corpus_clean)
+comments_dtm <- DocumentTermMatrix(corpus_clean, list(dictionary = ))
 #comments_m <- as.matrix(comments_dtm)
-comments_m<- removeSparseTerms(comments_dtm,0.98)
+comments_m_sparse<- removeSparseTerms(comments_dtm,0.98)
 #comments_m_sparse
-#comments_m <- as.matrix(comments_m_sparse)
-dim(comments_m)
+comments_m <- as.matrix(comments_m_sparse)
+comments <- as.data.frame(comments_m)
+
+#dim(comments_m)
 
 ##### Splitting into Train & Test sets #######
 
@@ -53,12 +51,20 @@ i = ceiling(nrow(df_train)*0.7)
 df_train_model <- df_train[1:i, ]
 df_test_model <- df_train[i+1:nrow(df_train), ]
 
-comments_m_train <- comments_m[1:i, ]
-comments_m_test <- comments_m[(i+1):nrow(df_train), ]
+
+
+comments_train <- comments[1:i, ] 
+comments_test <- comments[(i+1):nrow(df_train), ]
 
 comment_corpus_train <- corpus_clean[1:i]
 comment_corpus_test <- corpus_clean[i+1:nrow(df_train)]
 prop.table(table(df_train_model$rowSum))
 prop.table(table(df_test_model$rowSum))
 
+comments_dict <- Terms(findFreqTerms(comments_train, 5)) 
 
+
+##### Building model ########
+
+comment_classifier <- naiveBayes(comments_train, df_train_model$class1)
+comment_test_pred <- predict(comment_classifier, comments_test)
