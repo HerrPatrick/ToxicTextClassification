@@ -1,3 +1,7 @@
+### Source ####
+
+#https://www.tidytextmining.com/sentiment.html
+
 ### Load libraries ###############
 
 library(dplyr)
@@ -29,7 +33,7 @@ text_df <- df_train %>%
   select(id,comment_text, classification1) %>%
   rename(word = comment_text) %>%
   #mutate(word = str_extract(word, "[a-z']+")) %>%
-  head(10000) %>%
+  #head(10000) %>%
   unnest_tokens(word,word) 
 
 
@@ -49,12 +53,14 @@ tidy_comment %>%
 
 tidy_class <-tidy_comment %>%
   count(word, classification1, sort = TRUE) %>%
+  ungroup()
+  
+tidy_class %>% 
   group_by(classification1) %>%
   top_n(10) %>%
   ungroup() %>%
-  mutate(word = reorder(word,n))
+  mutate(word = reorder(word,n)) %>%
 
-tidy_class %>% 
   ggplot(aes(word, n, fill = classification1)) +
   geom_col(show.legend = F) +
   facet_wrap(~classification1, scales = "free_y") +
