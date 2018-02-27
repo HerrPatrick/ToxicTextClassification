@@ -29,15 +29,14 @@ df_train$rowSum <- rowSums(df_train[,3:8])
 df_train$classification1 <- ifelse(df_train$rowSum==0,'ham', 'spam')
                                    
 
-text_df <- df_train %>%
+tidy_comment <- df_train %>%
   select(id,comment_text, classification1) %>%
   rename(word = comment_text) %>%
+  filter(!str_detect(word,"[0-9]")) %>%
   #mutate(word = str_extract(word, "[a-z']+")) %>%
-  #head(10000) %>%
-  unnest_tokens(word,word) 
-
-
-tidy_comment <- text_df %>%
+  head(10) %>%
+  unnest_tokens(word,word)%>%
+  #mutate(word = wordStem(word)) %>%
   anti_join(stop_words)
 
 
