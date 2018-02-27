@@ -4,6 +4,7 @@ library(dplyr)
 library(stringr)
 library(tm)
 library(tidytext)
+library(ggplot2)
 #library(SnowballC)
 #library(qdap) #problem with java re 
 #library(e1071)
@@ -27,3 +28,12 @@ text_df <- df_train %>%
 
 tidy_comment <- text_df %>%
   anti_join(stop_words)
+
+tidy_comment %>%
+  count(word, sort = TRUE) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word,n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip()
+
