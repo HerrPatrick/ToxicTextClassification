@@ -7,12 +7,12 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+# Introduction 
 
-Developing a classification algorithm for wikipedia comments.
+Developing a classification algorithm for wikipedia comments to detect if they are toxic, severe toxic, obscene, threat, insult and/or identity hate. The data set is part of a Kaggle competition. Learnings and inspiration and taken from <https://www.tidytextmining.com>.
 
-## loading data and packages
-```{r initialization}
+## Loading needed packages
+```{r initialization, results='hide', message=FALSE, warning=FALSE}
 library(dplyr)
 library(stringr)
 library(tm)
@@ -20,17 +20,19 @@ library(tidytext)
 library(ggplot2)
 library(SnowballC)
 
-# Loading training data
+```
+## Loading data
+```{r loading data}
 df_train <- read.csv("data/train.csv", sep = ",", stringsAsFactors = F)
+df_test <-  read.csv("data/test.csv", sep = ",", stringsAsFactors = F)
 
 ```
+## Data preparation
+Create new feature for simplifying first classification step. Whether or not the wikipedia comment is toxic or not. This is only possible for the training data set.
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r spamham}
+df_train$rowSum <- rowSums(df_train[,3:8])
+df_train$classification1 <- ifelse(df_train$rowSum==0,'ham', 'spam')
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
