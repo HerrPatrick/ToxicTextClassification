@@ -1,0 +1,36 @@
+---
+title: "Toxic Text Classification"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+Developing a classification algorithm for wikipedia comments.
+
+## loading data and packages
+```{r initialization}
+library(dplyr)
+library(stringr)
+library(tm)
+library(tidytext)
+library(ggplot2)
+library(SnowballC)
+
+# Loading training data
+df_train <- read.csv("data/train.csv", sep = ",", stringsAsFactors = F)
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
