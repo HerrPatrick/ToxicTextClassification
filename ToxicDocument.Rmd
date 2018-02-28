@@ -26,6 +26,7 @@ library(SnowballC)
 df_train <- read.csv("data/train.csv", sep = ",", stringsAsFactors = F)
 df_test <-  read.csv("data/test.csv", sep = ",", stringsAsFactors = F)
 
+head(df_train)
 ```
 ## Data preparation
 Create new feature for simplifying first classification step. Whether or not the wikipedia comment is toxic or not. This is only possible for the training data set.
@@ -35,4 +36,18 @@ df_train$rowSum <- rowSums(df_train[,3:8])
 df_train$classification1 <- ifelse(df_train$rowSum==0,'ham', 'spam')
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Creating a tidytext format for the data set. Removing stop words, numbers, small letters only. A combintation of tidytext, dplyr and SnowballC
+```{r tidytext , message=FALSE, warning=FALSE}
+tidy_comment <- df_train %>%
+  select(id,comment_text, classification1) %>%
+  rename(word = comment_text) %>%
+  filter(!str_detect(word,"[0-9]")) %>%
+  unnest_tokens(word,word)%>%
+  mutate(word = wordStem(word)) %>%
+  anti_join(stop_words)
+
+head(tidy_comment,15)
+```
+
+
+

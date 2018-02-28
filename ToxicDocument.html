@@ -137,14 +137,62 @@ library(SnowballC)</code></pre>
 <div id="loading-data" class="section level2">
 <h2>Loading data</h2>
 <pre class="r"><code>df_train &lt;- read.csv(&quot;data/train.csv&quot;, sep = &quot;,&quot;, stringsAsFactors = F)
-df_test &lt;-  read.csv(&quot;data/test.csv&quot;, sep = &quot;,&quot;, stringsAsFactors = F)</code></pre>
+df_test &lt;-  read.csv(&quot;data/test.csv&quot;, sep = &quot;,&quot;, stringsAsFactors = F)
+
+head(df_train)</code></pre>
+<pre><code>##                 id
+## 1 0000997932d777bf
+## 2 000103f0d9cfb60f
+## 3 000113f07ec002fd
+## 4 0001b41b1c6bb37e
+## 5 0001d958c54c6e35
+## 6 00025465d4725e87
+##                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         comment_text
+## 1                                                                                                                                                                                                                                                                                                                                                                          Explanation\nWhy the edits made under my username Hardcore Metallica Fan were reverted? They weren't vandalisms, just closure on some GAs after I voted at New York Dolls FAC. And please don't remove the template from the talk page since I'm retired now.89.205.38.27
+## 2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   D'aww! He matches this background colour I'm seemingly stuck with. Thanks.  (talk) 21:51, January 11, 2016 (UTC)
+## 3                                                                                                                                                                                                                                                                                                                                                                                                          Hey man, I'm really not trying to edit war. It's just that this guy is constantly removing relevant information and talking to me through edits instead of my talk page. He seems to care more about the formatting than the actual info.
+## 4 &quot;\nMore\nI can't make any real suggestions on improvement - I wondered if the section statistics should be later on, or a subsection of &quot;&quot;types of accidents&quot;&quot;  -I think the references may need tidying so that they are all in the exact same format ie date format etc. I can do that later on, if no-one else does first - if you have any preferences for formatting style on references or want to do it yourself please let me know.\n\nThere appears to be a backlog on articles for review so I guess there may be a delay until a reviewer turns up. It's listed in the relevant form eg Wikipedia:Good_article_nominations#Transport  &quot;
+## 5                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                You, sir, are my hero. Any chance you remember what page that's on?
+## 6                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                &quot;\n\nCongratulations from me as well, use the tools well.  · talk &quot;
+##   toxic severe_toxic obscene threat insult identity_hate
+## 1     0            0       0      0      0             0
+## 2     0            0       0      0      0             0
+## 3     0            0       0      0      0             0
+## 4     0            0       0      0      0             0
+## 5     0            0       0      0      0             0
+## 6     0            0       0      0      0             0</code></pre>
 </div>
 <div id="data-preparation" class="section level2">
 <h2>Data preparation</h2>
 <p>Create new feature for simplifying first classification step. Whether or not the wikipedia comment is toxic or not. This is only possible for the training data set.</p>
 <pre class="r"><code>df_train$rowSum &lt;- rowSums(df_train[,3:8])
 df_train$classification1 &lt;- ifelse(df_train$rowSum==0,'ham', 'spam')</code></pre>
-<p>Note that the <code>echo = FALSE</code> parameter was added to the code chunk to prevent printing of the R code that generated the plot.</p>
+<p>Creating a tidytext format for the data set. Removing stop words, numbers, small letters only. A combintation of tidytext, dplyr and SnowballC</p>
+<pre class="r"><code>tidy_comment &lt;- df_train %&gt;%
+  select(id,comment_text, classification1) %&gt;%
+  rename(word = comment_text) %&gt;%
+  filter(!str_detect(word,&quot;[0-9]&quot;)) %&gt;%
+  unnest_tokens(word,word)%&gt;%
+  mutate(word = wordStem(word)) %&gt;%
+  anti_join(stop_words)
+
+head(tidy_comment,15)</code></pre>
+<pre><code>##                  id       word classification1
+## 1  000113f07ec002fd        hei             ham
+## 2  000113f07ec002fd     realli             ham
+## 3  000113f07ec002fd       edit             ham
+## 4  000113f07ec002fd        war             ham
+## 5  000113f07ec002fd        it'             ham
+## 6  000113f07ec002fd        thi             ham
+## 7  000113f07ec002fd        gui             ham
+## 8  000113f07ec002fd constantli             ham
+## 9  000113f07ec002fd      remov             ham
+## 10 000113f07ec002fd      relev             ham
+## 11 000113f07ec002fd     inform             ham
+## 12 000113f07ec002fd       talk             ham
+## 13 000113f07ec002fd       edit             ham
+## 14 000113f07ec002fd       talk             ham
+## 15 000113f07ec002fd       page             ham</code></pre>
 </div>
 </div>
 
