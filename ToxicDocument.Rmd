@@ -1,17 +1,34 @@
 ---
 title: "Toxic Text Classification"
-output: html_document
+
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+    highlight: tango
 ---
+
+<style type="text/css">
+.table {
+
+    width: 100%;
+
+}
+</style>
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Introduction 
-
+# Challenge
 Developing a classification algorithm for wikipedia comments to detect if they are toxic, severe toxic, obscene, threat, insult and/or identity hate. The data set is part of a Kaggle competition. Learnings and inspiration and taken from <https://www.tidytextmining.com>.
 
-## Loading needed packages
+## Text workflow in R
+![](tidytextworkflow.JPG)
+
+# Initialization project
+## Packages
 ```{r initialization, results='hide', message=FALSE, warning=FALSE}
 library(dplyr)
 library(stringr)
@@ -19,34 +36,190 @@ library(tm)
 library(tidytext)
 library(ggplot2)
 library(SnowballC)
-
+library(knitr)
+library(kableExtra)
+library(igraph)
+library(qdap)
 ```
+
+
 ## Loading data
 ```{r loading data}
-df_train <- read.csv("data/train.csv", sep = ",", stringsAsFactors = F)
-df_test <-  read.csv("data/test.csv", sep = ",", stringsAsFactors = F)
+df_train <- read.csv("data/train.csv", sep = ",", stringsAsFactors = F, nrows = 3000)
+df_test <-  read.csv("data/test.csv", sep = ",", stringsAsFactors = F, nrows = 3000)
 
-head(df_train)
 ```
-## Data preparation
-Create new feature for simplifying first classification step. Whether or not the wikipedia comment is toxic or not. This is only possible for the training data set.
+# Data understanding
+## Size and dimensions
+Here is the key figures for the train and test data sets:
 
-```{r spamham}
+Table Name  | # rows            |  Column Names
+------------- | -----------           | ----------------------------------------------------------------------------------------------
+df_train    | `r nrow(df_train)`| `r colnames(df_train)` 
+df_test     | `r nrow(df_test)` | `r colnames(df_test)`
+
+
+## Example text
+
+```{r, echo = FALSE }
+df_train$comment_text_n <- str_replace_all(df_train$comment_text, "[\r\n]", " ") 
+```
+
+
+Text classification  | Example text
+-------------------|---------------------------------------------------------------
+Non-Toxic           | `r df_train$comment_text_n[1]`
+toxic               | `r df_train$comment_text_n[which(df_train$toxic==1)[2]]`
+severe_toxic        | `r df_train$comment_text_n[which(df_train$severe_toxic==1)[1]]`
+obscene             | `r df_train$comment_text_n[which(df_train$obscene_toxic==1)[1]]`
+threat              |  `r df_train$comment_text_n[which(df_train$threat==1)[1]]`
+insult              |  `r df_train$comment_text_n[which(df_train$insult==1)[2]]`
+identity_hate       |  `r df_train$comment_text_n[which(df_train$identity_hate==1)[1]]`
+
+
+## Classification classes
+In the data set we have the following observations per toxic class (some of the text might be part of multiple toxic classes):
+```{r, echo=FALSE}
 df_train$rowSum <- rowSums(df_train[,3:8])
-df_train$classification1 <- ifelse(df_train$rowSum==0,'ham', 'spam')
+df_train$nontoxic <- ifelse(df_train$rowSum==0,1, 0)
 ```
+Text class     | Non-Toxic | toxic | severe_toxic | obscene | threat | insult | identity_hate     
+-------------- | -----------|-----------|-----------|-----------|-----------|-----------|----------- 
+Observations   |`r sum(df_train$nontoxic)`| `r sum(df_train$toxic)`| `r sum(df_train$severe_toxic)`| `r sum(df_train$obscene)`| `r sum(df_train$threat)`| `r sum(df_train$insult)`| `r sum(df_train$identity_hate)`
+
+## Network representation of the dependent classes
+In this section we develop a way of visualizing the strength of the depenendies between the classes.
+First we create a summary table per class.
+
+```{r network}
+termCommentMatrix <- df_train %>%
+  select(-comment_text, -comment_text_n, -rowSum, -id) %>%
+  as.matrix() %>%
+  t()
+
+termMatrix <- termCommentMatrix[1:6,]%*%t(termCommentMatrix[1:6,])
+
+g <- graph.adjacency(termMatrix, weighted=T)
+# remove loops
+g <- simplify(g)
+# set labels and degrees of vertices
+V(g)$label <- V(g)$name
+V(g)$degree <- degree(g)
+layout1 <- layout.fruchterman.reingold(g)
+plot(g, layout=layout1, edge.width = edge.betweenness(g))
+
+```
+
+## Word frequency by class
+
+```{r, warning=FALSE, message=FALSE}
+toxic_tokens <- df_train %>%
+  unnest_tokens(output = word, input = comment_text) %>%
+  filter(!str_detect(word, "^[0-9]*$")) %>%
+  anti_join(stop_words) %>% 
+  mutate(word = SnowballC::wordStem(word)) %>%
+  select(-comment_text_n, -rowSum)
+
+head(toxic_tokens)
+
+
+toxic_tfidf <- toxic_tokens %>%
+  count(nontoxic, word) %>%
+  bind_tf_idf(term = word, document= nontoxic, n = n)
+
+plot_toxic <- toxic_tfidf %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(word = factor(word, levels = rev(unique(word))))
+
+plot_toxic %>%
+  mutate(nontoxic = factor(nontoxic)) %>%
+  group_by(nontoxic) %>%
+  top_n(10) %>%
+  ungroup() %>%
+  ggplot(aes(word,tf_idf)) + geom_col() + labs(x = NULL, y = "tf_idf") +
+  facet_wrap(~nontoxic, scales = "free") + coord_flip()
+  
+
+
+```
+
+
+
+# Data preparation for classification
+In this first approach we aim at classifying whether the text is non-toxic or not (meaning all the toxic categories).
+
+## Transforming to corpus format
+Transforming the long strings of text into a corpus format. Punctation, line breaks, special caracthers and captial letters.
+
+```{r}
+toxic_corpus <- VCorpus(VectorSource(df_train$comment_text))
+
+clean_corpus <- function(corpus){
+  cleaned <- corpus %>%
+    tm_map(tolower) %>%
+    tm_map(PlainTextDocument) %>%
+    tm_map(removePunctuation) %>%
+    tm_map(removeNumbers) %>%
+    tm_map(removeWords, stopwords("english")) %>%
+    tm_map(content_transformer(function(x) str_replace_all(x,"[^[:alnum:]]", " "))) %>%
+    tm_map(stripWhitespace)
+  
+  return(cleaned)
+  
+}
+
+
+clean_corp <- clean_corpus(toxic_corpus)
+
+print(clean_corp[[1]][1])
+print(df_train$comment_text[1])
+
+
+
+
+```
+
+## From tidy to document-term matrix
+```{r}
+
+toxic_dtm_tidytext <- toxic_tokens %>%
+  count(id,word) %>%
+  #cast_dtm(document = id, term = word, value = n, weighting = tm::weightTfIdf)
+  cast_dtm(document = id, term = word, value = n) %>%
+  removeSparseTerms(sparse = 0.99)
+
+toxic_dtm_tidytext
+
+#removeSparseTerms(toxic)
+
+```
+
+
+
+
+
+
+
+
+
+# Modeling
+
+
+
+
+# Backup code (historic)
 
 Creating a tidytext format for the data set. Removing stop words, numbers, small letters only. A combintation of tidytext, dplyr and SnowballC
-```{r tidytext , message=FALSE, warning=FALSE}
-tidy_comment <- df_train %>%
-  select(id,comment_text, classification1) %>%
-  rename(word = comment_text) %>%
-  filter(!str_detect(word,"[0-9]")) %>%
-  unnest_tokens(word,word)%>%
-  mutate(word = wordStem(word)) %>%
-  anti_join(stop_words)
+```{r tidytext , message=FALSE, warning=FALSE, eval = FALSE}
+#tidy_comment <- df_train %>%
+#  select(id,comment_text, classification1) %>%
+#  rename(word = comment_text) %>%
+#  
+#  unnest_tokens(word,word)%>%
+# mutate(word = wordStem(word)) %>%
+#  anti_join(stop_words)
 
-head(tidy_comment,15)
+#head(tidy_comment,15)
 ```
 
 
