@@ -40,13 +40,16 @@ library(knitr)
 library(kableExtra)
 library(igraph)
 library(qdap)
+library(topicmodels)
+library(tidyr)
+library(quanteda)
 ```
 
 
 ## Loading data
 ```{r loading data}
-df_train <- read.csv("data/train.csv", sep = ",", stringsAsFactors = F, nrows = 3000)
-df_test <-  read.csv("data/test.csv", sep = ",", stringsAsFactors = F, nrows = 3000)
+df_train <- read.csv("data/train.csv", sep = ",", stringsAsFactors = F, nrows = 6000)
+df_test <-  read.csv("data/test.csv", sep = ",", stringsAsFactors = F, nrows = 6000)
 
 ```
 # Data understanding
@@ -113,10 +116,14 @@ plot(g, layout=layout1, edge.width = edge.betweenness(g))
 ## Word frequency by class
 
 ```{r, warning=FALSE, message=FALSE}
+toxic_stop_words <- data.frame(word = c("article", "wikipedia", "edit", "page", "å"), lexicon = "Manual")
+
+
 toxic_tokens <- df_train %>%
   unnest_tokens(output = word, input = comment_text) %>%
   filter(!str_detect(word, "^[0-9]*$")) %>%
   anti_join(stop_words) %>% 
+  anti_join(toxic_stop_words) %>%
   mutate(word = SnowballC::wordStem(word)) %>%
   select(-comment_text_n, -rowSum)
 
@@ -145,52 +152,26 @@ plot_toxic %>%
 
 
 
-# Data preparation for classification
+# Data preparation
 In this first approach we aim at classifying whether the text is non-toxic or not (meaning all the toxic categories).
 
-## Transforming to corpus format
-Transforming the long strings of text into a corpus format. Punctation, line breaks, special caracthers and captial letters.
 
+## From tidy to term matrixs
 ```{r}
-toxic_corpus <- VCorpus(VectorSource(df_train$comment_text))
 
-clean_corpus <- function(corpus){
-  cleaned <- corpus %>%
-    tm_map(tolower) %>%
-    tm_map(PlainTextDocument) %>%
-    tm_map(removePunctuation) %>%
-    tm_map(removeNumbers) %>%
-    tm_map(removeWords, stopwords("english")) %>%
-    tm_map(content_transformer(function(x) str_replace_all(x,"[^[:alnum:]]", " "))) %>%
-    tm_map(stripWhitespace)
-  
-  return(cleaned)
-  
-}
-
-
-clean_corp <- clean_corpus(toxic_corpus)
-
-print(clean_corp[[1]][1])
-print(df_train$comment_text[1])
-
-
-
-
-```
-
-## From tidy to document-term matrix
-```{r}
+toxic_dfm_tidytext <- toxic_tokens %>%
+  count(id,word) %>%
+  #cast_dtm(document = id, term = word, value = n, weighting = tm::weightTfIdf)
+  cast_dfm(document = id, term = word, value = n) #%>%
+  #removeSparseTerms(sparse = 0.99)
 
 toxic_dtm_tidytext <- toxic_tokens %>%
   count(id,word) %>%
   #cast_dtm(document = id, term = word, value = n, weighting = tm::weightTfIdf)
-  cast_dtm(document = id, term = word, value = n) %>%
-  removeSparseTerms(sparse = 0.99)
+  cast_dtm(document = id, term = word, value = n) #%>%
+  #removeSparseTerms(sparse = 0.99)
 
-toxic_dtm_tidytext
 
-#removeSparseTerms(toxic)
 
 ```
 
@@ -204,23 +185,78 @@ toxic_dtm_tidytext
 
 # Modeling
 
+## Unsupervised learning
+With the DocumentTermMatrix as a starting point
+```{r}
+# Removing empty rows
+rowTotals <- apply(toxic_dtm_tidytext, 1, sum)
+toxic_dtm_tidytext_new <- toxic_dtm_tidytext[rowTotals>0,]
 
+toxic_lda <- LDA(toxic_dtm_tidytext_new, k = 2, control = list(seed = 12))
 
+toxic_topics <- tidy(toxic_lda, matrix="beta")
 
-# Backup code (historic)
+toxic_lda_top_terms <- toxic_topics %>%
+  group_by(topic) %>%
+  top_n(10,beta) %>%
+  ungroup()%>%
+  arrange(topic, -beta)
 
-Creating a tidytext format for the data set. Removing stop words, numbers, small letters only. A combintation of tidytext, dplyr and SnowballC
-```{r tidytext , message=FALSE, warning=FALSE, eval = FALSE}
-#tidy_comment <- df_train %>%
-#  select(id,comment_text, classification1) %>%
-#  rename(word = comment_text) %>%
-#  
-#  unnest_tokens(word,word)%>%
-# mutate(word = wordStem(word)) %>%
-#  anti_join(stop_words)
+toxic_lda_top_terms %>%
+  mutate(term = reorder(term,beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~topic, scales = "free") + coord_flip()
 
-#head(tidy_comment,15)
+beta_spread <- toxic_topics %>%
+  mutate(topic = paste0("topic", topic)) %>%
+  spread(topic, beta) %>%
+  filter(topic1 >0.001 | topic2 > 0.001) %>%
+  mutate(log_ratio = log2(topic2/topic1)) %>%
+  arrange(desc(log_ratio))
+
+beta_spread
+
 ```
 
 
+## Supervised learning
+
+### Naive Bayes model
+First step is to split current labeled data set into a training and test data set. Assuming a 80 % training set size.
+```{r}
+split_threshold <- floor(0.8*nrow(toxic_dfm_tidytext))
+
+toxic_dfm_train <- toxic_dfm_tidytext[1:split_threshold,]
+toxic_dfm_test <- toxic_dfm_tidytext[(split_threshold+1):nrow(toxic_dfm_tidytext), ]
+toxic_dfm_test <- dfm_select(toxic_dfm_test, toxic_dfm_train)
+
+tmp <- toxic_tokens %>%
+  select(id) %>%
+  distinct()
+
+label <- df_train %>%
+  inner_join(tmp) %>%
+  select(id,nontoxic)
+
+train_label <- label[1:split_threshold,]
+test_label <- label[(split_threshold+1):nrow(toxic_dfm_tidytext),]
+
+```
+
+With our data split into training and test data sets, we'll train our naive Bayes model, and tell the model to pay attention to the content of the text message and the ham or spam label of the message. Then, we'll use that trained model to predict whether the new test observations are ham or spam all on its own. Finally, we'll make a contingency table to see how accurately it performs.
+
+```{r}
+
+toxic_classifier <- textmodel_nb(toxic_dfm_train, train_label$nontoxic)
+
+```
+
+
+# Evaluation
+
+```{r}
+toxic_predictions <- predict(toxic_classifier, newdata = toxic_dfm_test)
+table(toxic_predictions$nb.predicted, test_label$nontoxic)
+```
 
