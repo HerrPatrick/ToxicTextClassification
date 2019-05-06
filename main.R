@@ -7,7 +7,8 @@ library(SnowballC)
 #library(qdap) #problem with java re 
 library(e1071)
 library(gmodels)
-
+library(purrr)
+library(zoo)
 
 ### Load data################
 
